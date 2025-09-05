@@ -5,6 +5,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
@@ -24,13 +25,14 @@ public class MainController {
     public ResponseEntity<List<Map<String, Object>>> getProcessedData(
             @RequestParam String fromDate,
             @RequestParam String toDate,
-            @RequestParam(defaultValue = "A") String inout_type
+            @RequestParam(defaultValue = "A") String inout_type,
+            @RequestParam Integer groupNum
     ) {
         try {
             // 1. API 서버(8001 포트)의 mock1 호출
             String apiUrl = String.format(
-                    "http://localhost:8001/api/mock1?fromDate=%s&toDate=%s&inout_type=%s",
-                    fromDate, toDate, inout_type
+                    "http://localhost:8001/api/mock1?fromDate=%s&toDate=%s&inout_type=%s&groupNum=%s",
+                    fromDate, toDate, inout_type, groupNum
             );
 
             log.info("API 서버 호출: {}", apiUrl);
@@ -55,6 +57,29 @@ public class MainController {
             return ResponseEntity.ok(List.of());
         }
     }
+
+    // 그룹 추가 요청 → Mock 서버 호출
+    @PostMapping("/addGroup")
+    public ResponseEntity<Map<String, Object>> addGroup(@RequestParam(defaultValue = "1") int step) {
+        try {
+            String apiUrl = String.format("http://localhost:8001/api/increaseGroupMax?step=%d", step);
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    apiUrl,
+                    HttpMethod.POST,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {
+                    }
+            );
+
+            log.info("Mock 서버 그룹 증가 호출 성공: {}", response.getBody());
+            return response;
+        } catch (Exception e) {
+            log.error("Mock 서버 그룹 증가 호출 실패", e);
+            return ResponseEntity.status(500).body(Map.of("error", "그룹 추가 실패"));
+        }
+    }
+
 
     @GetMapping("/")
     public String home() {

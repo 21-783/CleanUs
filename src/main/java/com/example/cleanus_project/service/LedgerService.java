@@ -21,12 +21,12 @@ public class LedgerService {
 
     private final String NODE_SERVER_URL = "http://localhost:4000/blockchain/record";
 
-    public void fetchAndSave(String fromDate, String toDate, String inoutType) {
-        List<Transaction> transactions = mockApiService.fetchTransactions(fromDate,toDate,inoutType);
+    public void fetchAndSave(String fromDate, String toDate, String inoutType, Integer groupNum) {
+        List<Transaction> transactions = mockApiService.fetchTransactions(fromDate,toDate,inoutType, groupNum);
 
         for (Transaction tx : transactions) {
-            boolean exists = transactionRepository.existsByDateAndShopNameAndWithdrawAmount(
-                    tx.getDate(), tx.getShopName(), tx.getAmount()
+            boolean exists = transactionRepository.existsByDateAndShopNameAndAmountAndGroupNum(
+                    tx.getDate(), tx.getShopName(), tx.getAmount(), tx.getGroupNum()
             );
 
             if (!exists) {
@@ -42,7 +42,7 @@ public class LedgerService {
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         BlockchainRecordRequest record = new BlockchainRecordRequest(
-                tx.getDate(), tx.getShopName(), tx.getAmount()
+                tx.getDate(), tx.getShopName(), tx.getAmount(), tx.getGroupNum()
         );
 
         HttpEntity<BlockchainRecordRequest> request = new HttpEntity<>(record, headers);

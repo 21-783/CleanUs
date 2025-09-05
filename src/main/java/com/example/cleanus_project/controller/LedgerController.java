@@ -14,8 +14,9 @@ public class LedgerController {
     @GetMapping("/fetch")
     public String fetchAndSave(@RequestParam String fromDate,
                                @RequestParam String toDate,
-                               @RequestParam String inoutType) {
-        ledgerService.fetchAndSave(fromDate, toDate, inoutType);
+                               @RequestParam String inoutType,
+                               @RequestParam Integer groupNum) {
+        ledgerService.fetchAndSave(fromDate, toDate, inoutType, groupNum);
         return "Mock API 데이터 가져와서 저장 완료!";
     }
 }

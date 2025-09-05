@@ -5,10 +5,7 @@ import jakarta.persistence.PersistenceContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,7 +21,6 @@ public class MockController {
     @PersistenceContext // 어노테이션 EntityManager을 사용하기 쉽도록
     private EntityManager entityManager; // EntityManager 주입
 
-    //캡디 api 시작
     private static final List<Map<String, String>> BANK_ACCOUNTS = List.of(
             Map.of("bank_name", "KYONGNAM BANK", "account_num", "221-0000-1234-56"),
             Map.of("bank_name", "KAKAOBANK", "account_num", "3333-12-3456789"),
@@ -36,7 +32,8 @@ public class MockController {
     );
 
     private static final Random RANDOM = new Random();
-
+    private int groupCounter = 0; //생성될 거래 내역 데이터에 gruop 번호를 순차적으로 부여하는 역할
+    private int maxGroupNum = 9; // 초기 최대 그룹 번호
     private final List<Map<String, Object>> transactionHistory = new ArrayList<>();
 
     // 1. JSON 생성 함수
@@ -51,6 +48,9 @@ public class MockController {
         int withdrawnAmount = isWithdraw ? amount : 0;
         int depositedAmount = isWithdraw ? 0 : amount;
 
+        int currentGroupNum = groupCounter;
+        groupCounter = (groupCounter + 1) % (maxGroupNum + 1);
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("bank_name", bankAccount.get("bank_name"));
         result.put("account_num", bankAccount.get("account_num"));
@@ -59,13 +59,14 @@ public class MockController {
         result.put("withdrawn_amount", withdrawnAmount);
         result.put("deposited_amount", depositedAmount);
         result.put("tran_date_obj", now); // 내부 필터링용 LocalDateTime 객체 저장
+        result.put("group_num", currentGroupNum); // 그룹 번호용 필드
 
         return result;
     }
 
     // 2. 주기적으로 실행되는 스케줄링 함수
     //@Scheduled(fixedRate = 60 * 60 * 1000) // 1시간마다 실행
-    @Scheduled(fixedRate = 60 * 1000) //1분마다 실행 (60 * 1000ms), 1000 곱하는 이유? 매개변수 단위가 ms 이기 때문이다.
+    @Scheduled(fixedRate = 10 * 1000) //1분마다 실행 (10 * 1000ms), 1000 곱하는 이유? 매개변수 단위가 ms 이기 때문이다.
     public void generateAndStoreTransaction() {
         Map<String, Object> newTransaction = generateMockTransaction();
         transactionHistory.add(newTransaction);
@@ -78,8 +79,9 @@ public class MockController {
     public List<Map<String, Object>> getFilteredTransactions(
             @RequestParam String fromDate,
             @RequestParam String toDate,
-            @RequestParam(defaultValue = "A") String inout_type
-    ) {
+            @RequestParam(defaultValue = "A") String inout_type,
+            @RequestParam Integer groupNum
+    )    {
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
 
         LocalDate from = LocalDate.parse(fromDate, dateFormatter);
@@ -99,6 +101,7 @@ public class MockController {
                     }
                     return true;
                 })
+                .filter(tx -> groupNum == null || Objects.equals(tx.get("group_num"), groupNum)) // groupNum 필터
                 .map(tx -> {
                     Map<String, Object> clone = new LinkedHashMap<>(tx);
                     clone.remove("tran_date_obj"); // 내부용 필드는 제거
@@ -106,11 +109,19 @@ public class MockController {
                 })
                 .collect(Collectors.toList());
 
-        //반환되는 데이터 확인용 log.info
         //log.info("Filtered transactions sent to client: {}", filtered);
-
         return filtered;
     }
-
-    //캡디 api 끝
+    // 3. 그룹 최대치 증가 API
+    @PostMapping("/increaseGroupMax")
+    public Map<String, Object> increaseGroupMax(@RequestParam(defaultValue = "1") int step) {
+        if (step < 1) step = 1; // 최소 1 이상
+        maxGroupNum += step;
+        groupCounter = maxGroupNum; // 다음 거래 생성은 maxGroupNum 부터 다시 시작
+        log.info("그룹 최대치 {}만큼 증가 → 현재 maxGroupNum: {}", step, maxGroupNum);
+        return Map.of(
+                "maxGroupNum", maxGroupNum,
+                "increasedBy", step
+        );
+    }
 }
