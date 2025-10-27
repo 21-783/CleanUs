@@ -8,9 +8,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.security.MessageDigest; // SHA-256용 추가
-import java.security.NoSuchAlgorithmException; // SHA-256용 추가
-
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -30,22 +29,6 @@ public class MockController {
     private static final Random RANDOM = new Random();
     private Map<Integer, Integer> groupBalances = new HashMap<>(); //그룹별 잔액 관리 맵
 
-    // SHA-256 해시 함수 추가
-    private String sha256(String input) { // SHA-256 적용
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(input.getBytes());
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("SHA-256 해시 생성 실패", e);
-        }
-    }
     //가짜 거래내역 생성
     private Map<String, Object> generateMockTransaction(Integer groupNum, String bankName, String accountNum) {
 
@@ -83,7 +66,7 @@ public class MockController {
     }
 
   //DB에 거래내역 저장
-    @Scheduled(fixedRate = 10 * 1000)
+    @Scheduled(fixedRate = 600 * 1000)
     public void generateAndStoreTransaction() {
         try {
             //DB에서 그룹 정보 조회
@@ -97,8 +80,8 @@ public class MockController {
 
                 Map<String, Object> tx = generateMockTransaction(groupNum, bankName, accountNum);
 
-                //transactions 테이블에 저장
-                String sql = "INSERT INTO transactions (groupNum, date, description, amount, balance) " +
+                //mock_transactions 테이블에 저장
+                String sql = "INSERT INTO mock_transactions (groupNum, date, description, amount, balance) " +
                         "VALUES (?, ?, ?, ?, ?)";
                 Query insertQuery = entityManager.createNativeQuery(sql);
                 insertQuery.setParameter(1, tx.get("groupNum"));
@@ -134,8 +117,8 @@ public class MockController {
 
         int offset = (page - 1) * size;
 
-        String sql = "SELECT t.groupNum, g.bankName, g.accountNum, t.date, t.description, t.amount, t.balance " +
-                "FROM transactions t " +
+        String sql = "SELECT t.id, t.groupNum, g.userName, g.bankName, g.accountNum, t.date, t.description, t.amount, t.balance " +
+                "FROM mock_transactions t " +
                 "JOIN groups g ON t.groupNum = g.groupNum " +
                 "WHERE t.date BETWEEN ? AND ?" +
                 (groupNum != null ? " AND t.groupNum = ? " : "") +
@@ -157,13 +140,16 @@ public class MockController {
         List<Map<String, Object>> result = new ArrayList<>();
         for (Object[] row : rows) {
             Map<String, Object> map = new LinkedHashMap<>();
-            map.put("groupNum", row[0]);
-            map.put("bankName", row[1]);
-            map.put("accountNum", row[2]);
-            map.put("date", row[3]);
-            map.put("description", row[4]);
-            map.put("amount", row[5]);
-            map.put("balance", row[6]);
+            map.put("id", row[0]);
+            map.put("groupNum", row[1]);
+            map.put("userName", row[2]);
+            map.put("bankName", row[3]);
+            map.put("accountNum", row[4]);
+            map.put("date", row[5]);
+            map.put("description", row[6]);
+            map.put("amount", row[7]);
+            map.put("balance", row[8]);
+
             result.add(map);
         }
 
@@ -173,51 +159,48 @@ public class MockController {
     //메인서버에서 받은 그룹 추가
     @PostMapping("/increaseGroupMax")
     public Map<String, Object> increaseGroupMax(
-            @RequestParam(defaultValue = "1") int step,
+            @RequestParam String userName,
             @RequestParam String bankName,
             @RequestParam String accountNum
     ) {
-        if (step < 1) step = 1;
-
-        // SHA-256 적용 -> 해시로 변경하여 저장 (추가)
-        String hashedBankName = sha256(bankName); // SHA-256 적용
-        String hashedAccountNum = sha256(accountNum); // SHA-256 적용
-
         //그룹 중복 계좌 확인
         Query checkQuery = entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM groups WHERE bankName = ? AND accountNum = ?"
+                "SELECT COUNT(*) FROM groups WHERE userName = ? AND bankName = ? AND accountNum = ?"
         );
-        checkQuery.setParameter(1, hashedBankName); // SHA-256 적용
-        checkQuery.setParameter(2, hashedAccountNum); // SHA-256 적용
+        checkQuery.setParameter(1, userName);
+        checkQuery.setParameter(2, bankName);
+        checkQuery.setParameter(3, accountNum);
 
         Number count = (Number) checkQuery.getSingleResult();
         if (count.intValue() > 0) {
-            log.warn("이미 존재하는 계좌-은행으로 그룹 생성 시도: {}-{}", bankName, accountNum);
+            log.warn("이미 존재하는 계좌-은행으로 그룹 생성 시도: {}-{}-{}", userName, bankName, accountNum);
             return Map.of(
                     "error", "이미 존재하는 계좌-은행입니다"
             );
         }
 
-        //새 그룹 번호 결정 (max(groupNum)+1)
+        //새 그룹 번호 결정 (max(groupNum) + 1)
         Query maxQuery = entityManager.createNativeQuery("SELECT COALESCE(MAX(groupNum), 0) FROM groups");
         Integer maxGroupNum = ((Number) maxQuery.getSingleResult()).intValue();
-        List<Integer> newGroupNums = new ArrayList<>();
-        for (int i = 1; i <= step; i++) {
-            newGroupNums.add(maxGroupNum + i);
+        int newGroupNum = maxGroupNum + 1;
 
-            //groups에 신규 그룹 추가
-            Query insertQuery = entityManager.createNativeQuery(
-                    "INSERT INTO groups (groupNum, bankName, accountNum) VALUES (?, ?, ?)"
-            );
-            insertQuery.setParameter(1, maxGroupNum + i);
-            insertQuery.setParameter(2, hashedBankName); // SHA-256 적용
-            insertQuery.setParameter(3, hashedAccountNum); // SHA-256 적용
-            insertQuery.executeUpdate();
-        }
+        //groups에 신규 그룹 추가
+        Query insertQuery = entityManager.createNativeQuery(
+                "INSERT INTO groups (groupNum, userName, bankName, accountNum) VALUES (?, ?, ?, ?)"
+        );
+        insertQuery.setParameter(1, newGroupNum);
+        insertQuery.setParameter(2, userName);
+        insertQuery.setParameter(3, bankName);
+        insertQuery.setParameter(4, accountNum);
+        insertQuery.executeUpdate();
 
-        log.info("새 그룹 생성 완료: {}", newGroupNums);
+        log.info("새 그룹 생성 완료: groupNum={}, userName={}, bankName={}, accountNum={}",
+                newGroupNum, userName, bankName, accountNum);
+
         return Map.of(
-                "newGroups", newGroupNums
+                "newGroup", newGroupNum,
+                "userName", userName
         );
     }
+
 }

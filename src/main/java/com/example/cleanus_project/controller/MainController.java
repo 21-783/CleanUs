@@ -3,6 +3,7 @@ package com.example.cleanus_project.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,7 +22,7 @@ public class MainController {
     @Autowired
     private RestTemplate restTemplate;
 
-    @GetMapping("/main")
+    @GetMapping("/main/transactions")
     public ResponseEntity<List<Map<String, Object>>> getProcessedData(
             @RequestParam String fromDate,
             @RequestParam String toDate,
@@ -60,17 +61,18 @@ public class MainController {
         }
     }
 
-    //그룹 추가 요청 → Mock 서버 호출
-    @PostMapping("/addGroup")
+    // 그룹 추가 요청 → Mock 서버 호출
+    @PostMapping("/main/addGroup")
     public ResponseEntity<Map<String, Object>> addGroup(
-            @RequestParam(defaultValue = "1") int step,
-            @RequestParam String bank_name,
-            @RequestParam String account_num
+            @RequestParam String userName,
+            @RequestParam String bankName,
+            @RequestParam String accountNum
     ) {
         try {
+            // Mock 서버 API 호출 URL 구성 (userName 포함)
             String apiUrl = String.format(
-                    "http://localhost:8001/api/increaseGroupMax?step=%d&bankName=%s&accountNum=%s",
-                    step, bank_name, account_num
+                    "http://localhost:8001/api/increaseGroupMax?userName=%s&bankName=%s&accountNum=%s",
+                    userName, bankName, accountNum
             );
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -81,13 +83,16 @@ public class MainController {
             );
 
             Map<String, Object> body = response.getBody();
-            if (body != null && body.containsKey("error"))
-                return ResponseEntity.status(400).body(body); //중복 계좌 에러 프론트 전달
+            if (body != null && body.containsKey("error")) {
+                // 중복 계좌 에러 프론트 전달
+                return ResponseEntity.status(400).body(body);
+            }
 
-            log.info("Mock 서버 그룹 증가 호출 성공: {}", response.getBody());
+            log.info("Mock 서버 그룹 추가 호출 성공: {}", response.getBody());
             return response;
+
         } catch (Exception e) {
-            log.error("Mock 서버 그룹 증가 호출 실패", e);
+            log.error("Mock 서버 그룹 추가 호출 실패", e);
             return ResponseEntity.status(500).body(Map.of("error", "그룹 추가 실패"));
         }
     }
