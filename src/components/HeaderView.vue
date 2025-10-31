@@ -1,7 +1,14 @@
 <template>
   <header class="header-container">
     <div class="header-left">
-      <img src="@/assets/logo.png" alt="로고" class="logo" />
+      <!-- 🚨 1. 로고 클릭 시 MainPage.vue로 이동 -->
+      <img 
+        src="@/assets/logo.png" 
+        alt="로고" 
+        class="logo" 
+        @click="goToMain" 
+        style="cursor: pointer;"
+      />
     </div>
 
     <div class="header-center"> 
@@ -9,22 +16,97 @@
 
     <div class="header-right">
       <button class="icon-button account-button">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon user-icon">
+        <!-- 🚨 2. SVG 클릭 시 로그인 상태 확인 후 AdminPage로 이동 -->
+        <svg 
+          @click="handleAdminClick" 
+          xmlns="http://www.w3.org/2000/svg" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          stroke-width="2" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" 
+          class="icon user-icon"
+          style="cursor: pointer;"
+        >
           <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
           <circle cx="12" cy="7" r="4"></circle>
         </svg>
       </button>
-      <button class="login-button">
-        로그인
+      
+      <!-- 🚨 3 & 4. 로그인 상태에 따라 버튼 텍스트와 기능 변경 -->
+      <button class="login-button" @click="handleAuthClick">
+        {{ isLoggedIn ? '로그아웃' : '로그인' }}
       </button>
     </div>
   </header>
 </template>
 
 <script setup>
+import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router'; 
+
+const router = useRouter(); 
+
+// ----------------------------------------------------
+// 4. 로그인 상태 관리 (로컬 스토리지 확인)
+// ----------------------------------------------------
+const authToken = ref(localStorage.getItem('authToken')); 
+
+const isLoggedIn = computed(() => {
+    return !!authToken.value; // authToken의 존재 여부로 로그인 상태 판단
+});
+
+// ----------------------------------------------------
+// 1, 2, 3, 4. 라우팅 및 인증 핸들러 함수
+// ----------------------------------------------------
+
+// 1. 로고 클릭 시 MainPage.vue로 이동
+const goToMain = () => {
+    router.push({ name: 'MainView' });
+};
+
+// 2. SVG 클릭 핸들러 (AdminPage 이동, 로그인 상태 검사)
+const handleAdminClick = () => {
+    if (isLoggedIn.value) {
+        // 2-2. 로그인 상태: AdminPage.vue로 이동
+        router.push({ name: 'AdminPage' });
+    } else {
+        // 2-1. 비로그인 상태: 메시지 출력 (alert 사용)
+        alert("로그인시 사용가능합니다.");
+    }
+};
+
+// 3 & 4. 로그인/로그아웃 버튼 클릭 핸들러
+const handleAuthClick = () => {
+    if (isLoggedIn.value) {
+        // 4. 로그아웃 처리
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userEmail'); 
+        authToken.value = null; // 반응형 상태 업데이트
+        
+        // 로그아웃 후 MainView로 이동
+        router.push({ name: 'MainView' });
+        
+    } else {
+        // 3. 로그인 페이지로 이동
+        router.push({ name: 'LoginView' });
+    }
+};
+
+// 🚨 컴포넌트 마운트 시 로컬 스토리지 상태를 다시 확인
+onMounted(() => {
+    authToken.value = localStorage.getItem('authToken');
+});
 </script>
 
 <style scoped>
+/* 🚨 cursor: pointer 추가 (UI 피드백) */
+.header-left .logo,
+.icon-button .icon {
+    cursor: pointer; 
+}
+
 .header-container {
   display: flex;
   justify-content: space-between;
@@ -76,7 +158,8 @@
 }
 
 .login-button {
-  background-color: #28a745;
+  /* 🚨 로그아웃 버튼 색상 변화를 위해 배경색 유지 */
+  background-color: #28a745; 
   color: white;
   border: none;
   border-radius: 20px;

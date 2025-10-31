@@ -11,6 +11,7 @@ import LedgerSetting from '../components/LedgerSetting.vue'
 import UserInfo from '../components/UserInfo.vue'
 import TransactionDetail from '../components/TransactionTable.vue'
 import PopupView from '../components/PopUpView.vue'
+import ModalView from '../components/ModalView.vue'
 
 const routes = [
   {
@@ -22,6 +23,11 @@ const routes = [
     path: '/AccountSetting',
     name: 'AccountSetting',
     component: AccountSetting
+  },
+  {
+    path: '/ModalView',
+    name: 'ModalView',
+    component: ModalView
   },
   {
     path: '/PopupView',

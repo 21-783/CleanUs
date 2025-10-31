@@ -1,10 +1,15 @@
 <template>
   <div class="reset-password-container">
     <div class="form-wrapper">
-      <!-- 로고 섹션: 왼쪽 정렬 -->
+      <!-- 로고 섹션 -->
       <div class="logo-section">
-        <!-- 실제 로고 이미지 경로로 변경하세요. -->
-        <div class="logo-text">로고 사진</div>
+        <img 
+          src="@/assets/logo.png" 
+          alt="로고" 
+          class="logo" 
+          @click="goToMain"
+          style="cursor: pointer;"
+        />
       </div>
 
       <!-- 비밀번호 재설정 폼 -->
@@ -13,47 +18,49 @@
 
         <!-- 새 비밀번호 입력칸 -->
         <div class="input-group">
-          <label for="new-password" class="input-label" :class="{ 'error-text': isPasswordMismatch || !isPasswordValid }">
+          <label for="new-password" class="input-label" :class="{ 'error-text': errors.password }">
             새 비밀번호
           </label>
           <input
             type="password"
             id="new-password"
-            v-model="formData.newPassword"
+            v-model="formData.password"
             placeholder="새 비밀번호를 입력하세요"
             class="input-field"
-            :class="{ 'error-border': isPasswordMismatch || !isPasswordValid }"
+            :class="{ 'error-border': errors.password }"
             @input="validatePassword"
             required
           />
         </div>
+        <span v-if="errors.password" class="error-msg">{{ errors.password }}</span>
 
         <!-- 새 비밀번호 재입력칸 -->
         <div class="input-group">
-          <label for="confirm-password" class="input-label" :class="{ 'error-text': isPasswordMismatch }">
+          <label for="confirm-password" class="input-label" :class="{ 'error-text': errors.passwordConfirm }">
             새 비밀번호 재입력
           </label>
           <input
             type="password"
             id="confirm-password"
-            v-model="formData.confirmPassword"
+            v-model="formData.passwordConfirm"
             placeholder="새 비밀번호를 다시 입력하세요"
             class="input-field"
-            :class="{ 'error-border': isPasswordMismatch }"
-            @input="checkPasswordMatch"
+            :class="{ 'error-border': errors.passwordConfirm }"
+            @input="validatePasswordConfirm"
             required
           />
         </div>
+        <span v-if="errors.passwordConfirm" class="error-msg">{{ errors.passwordConfirm }}</span>
 
-        <!-- 비밀번호 규칙 및 경고 메시지 -->
+        <!-- 비밀번호 규칙 -->
         <div class="password-rules-section">
-          <p class="rule-text" :class="{ 'error-text': !isPasswordValid }">
-            1. 8~16자의 영문 대소문자, 숫자, 특수문자만 가능합니다.<br />
-            (사용 가능한 특수문자: )
+          <p class="rule-text" :class="{ 'error-text': errors.password }">
+            1. 8~16자의 영문 대소문자, 숫자, 특수문자를 포함해야 합니다.<br />
+            2. 같은 문자가 3회 이상 연속될 수 없습니다.<br />
+            3. 이메일(ID)과 동일할 수 없습니다.
           </p>
-          <p class="warning-text" v-if="isPasswordMismatch">
-            입력된 비밀번호가 일치하지 않습니다. 다시 입력해주세요.
-          </p>
+          <p class="warning-text" v-if="successMessage">{{ successMessage }}</p>
+          <p class="warning-text" v-if="errorMessage">{{ errorMessage }}</p>
         </div>
 
         <!-- 완료 버튼 -->
@@ -71,63 +78,136 @@
 
 <script setup>
 import { ref, computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import axios from 'axios';
 
-// 폼 데이터 상태 관리
+const router = useRouter();
+const route = useRoute();
+
+// 폼 상태
 const formData = ref({
-  newPassword: '',
-  confirmPassword: '',
+  password: '',
+  passwordConfirm: '', 
 });
 
-// 유효성 검사 상태
-const isPasswordMismatch = ref(false);
-const isPasswordValid = ref(true);
+// 에러 상태
+const errors = ref({
+  password: '',
+  passwordConfirm: ''
+});
 
-// 비밀번호 유효성 검사 함수
-const validatePassword = () => {
-  const password = formData.value.newPassword;
-  const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d).{8,16}$/;
-  
-  isPasswordValid.value = passwordRegex.test(password);
-  checkPasswordMatch();
+const successMessage = ref('');
+const errorMessage = ref('');
+
+// ----------------------------------------------------
+// 1. 로고 클릭 시 메인으로 이동
+// ----------------------------------------------------
+const goToMain = () => {
+  router.push({ name: 'MainView' });
 };
 
-// 비밀번호 일치 확인 함수
-const checkPasswordMatch = () => {
-  if (formData.value.newPassword && formData.value.confirmPassword) {
-    isPasswordMismatch.value = formData.value.newPassword !== formData.value.confirmPassword;
-  } else {
-    isPasswordMismatch.value = false;
+// ----------------------------------------------------
+// 2. 비밀번호 유효성 검사
+// ----------------------------------------------------
+const validatePassword = () => {
+  const pass = formData.value.password;
+  const username = route.query.email ? route.query.email.split('@')[0] : ''; 
+
+  const hasLetter = /[A-Za-z]/.test(pass);
+  const hasDigit = /\d/.test(pass);
+  const hasSpecial = /[^a-zA-Z0-9\s]/.test(pass);
+  const isSequential = /(.)\1{2,}/.test(pass);
+
+  errors.value.password = '';
+
+  if (pass.length < 8 || pass.length > 16) {
+    errors.value.password = '비밀번호는 8자리 이상 16자리 이하로 입력하세요.';
+  } else if (!hasLetter) {
+    errors.value.password = '비밀번호에는 영문 대소문자가 최소 1자 이상 포함되어야 합니다.';
+  } else if (!hasDigit) {
+    errors.value.password = '비밀번호에는 숫자가 최소 1자 이상 포함되어야 합니다.';
+  } else if (!hasSpecial) {
+    errors.value.password = '비밀번호에는 특수문자가 최소 1자 이상 포함되어야 합니다.';
+  } else if (isSequential) {
+    errors.value.password = '같은 문자가 3회 이상 연속될 수 없습니다.';
+  } else if (username && pass.includes(username)) {
+    errors.value.password = '비밀번호는 이메일과 동일할 수 없습니다.';
+  }
+
+  // passwordConfirm이 입력된 경우에만 검사
+  if (formData.value.passwordConfirm) {
+    validatePasswordConfirm();
   }
 };
 
-// 폼 유효성 최종 확인
-const isFormValid = computed(() => {
-  return (
-    formData.value.newPassword &&
-    formData.value.confirmPassword &&
-    !isPasswordMismatch.value &&
-    isPasswordValid.value
-  );
-});
-
-// 완료 버튼 클릭 핸들러
-const completeReset = () => {
-  if (isFormValid.value) {
-    console.log('비밀번호 재설정이 완료되었습니다. 메인 페이지로 이동합니다.');
-    // 실제 라우팅 로직을 여기에 추가하세요.
-    // 예: router.push('/main-page');
-    alert('비밀번호 재설정이 완료되었습니다. 메인 페이지로 이동합니다.');
+// 비밀번호 확인 검사
+const validatePasswordConfirm = () => {
+  if (formData.value.password !== formData.value.passwordConfirm) {
+    errors.value.passwordConfirm = '비밀번호가 일치하지 않습니다.';
   } else {
-    alert('비밀번호를 다시 확인해주세요.');
+    errors.value.passwordConfirm = '';
+  }
+};
+
+// 유효성 확인
+const isPasswordValid = computed(() => errors.value.password === '' && formData.value.password.length > 0);
+const isFormValid = computed(() => (
+  formData.value.password &&
+  formData.value.passwordConfirm &&
+  isPasswordValid.value &&
+  errors.value.passwordConfirm === ''
+));
+
+// ----------------------------------------------------
+// 3. 완료 버튼 클릭 시 비밀번호 재설정 요청
+// ----------------------------------------------------
+const completeReset = async () => {
+  if (!isFormValid.value) {
+    errorMessage.value = '입력된 비밀번호와 규칙을 다시 확인해주세요.';
+    return;
+  }
+
+  successMessage.value = '';
+  errorMessage.value = '';
+
+  try {
+    const payload = {
+      email: route.query.email,
+      token: route.query.token,
+      password: formData.value.password,
+    };
+
+    const response = await axios.post('/api/password/reset', payload); 
+
+    // 응답 상태 검증 강화
+    if (response.status === 200 && (response.data.success || response.data.message?.includes('success'))) {
+      successMessage.value = '비밀번호 재설정을 완료했습니다.';
+      // alert 제거 → UI 내 메시지로 표시
+      setTimeout(() => router.push({ name: 'LoginView' }), 1000);
+    } else {
+      errorMessage.value = response.data.message || "서버 오류가 발생했습니다.";
+      console.error('Password Reset Failed:', response.data);
+    }
+  } catch (error) {
+    console.error("API 호출 중 오류 발생:", error);
+    errorMessage.value = "서버가 불안정합니다. 다시 시도해주십시오.";
   }
 };
 </script>
 
 <style scoped>
-/* 전체 컨테이너 */
+.error-msg {
+  display: block;
+  font-size: 0.75rem;
+  color: #ef4444;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+  padding-left: 0.75rem;
+}
+
 .reset-password-container {
   min-height: 100vh;
-  background-color: #ffffff; /* 하얀 배경색 */
+  background-color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -135,31 +215,29 @@ const completeReset = () => {
   font-family: Arial, sans-serif;
 }
 
-/* 폼 래퍼 */
 .form-wrapper {
   width: 100%;
   max-width: 42rem;
   background-color: #ffffff;
-  border: 2px solid #f2f2f2; /* 연회색 테두리 */
+  border: 2px solid #f2f2f2;
   border-radius: 0.75rem;
   padding: 2rem;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-/* 로고 섹션 */
 .logo-section {
   display: flex;
   justify-content: flex-start;
   margin-bottom: 1.5rem;
+  height: 40px;
 }
 
-.logo-text {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #1f2937;
+.logo-section .logo {
+  cursor: pointer;
+  height: 100%;
+  width: auto;
 }
 
-/* 폼 제목 */
 .form-title {
   font-size: 1.5rem;
   font-weight: bold;
@@ -168,7 +246,6 @@ const completeReset = () => {
   margin-bottom: 2rem;
 }
 
-/* 입력 그룹 (라벨과 입력 필드) */
 .input-group {
   margin-bottom: 1rem;
 }
@@ -182,10 +259,9 @@ const completeReset = () => {
   transition: color 0.2s ease-in-out;
 }
 
-/* 입력 필드 (input) */
 .input-field {
   display: block;
-  width: 100%;
+  width: 95%;
   padding: 0.75rem;
   border-radius: 0.375rem;
   border: 2px solid #f2f2f2;
@@ -194,33 +270,30 @@ const completeReset = () => {
   transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 
-/* 포커스 시 스타일 */
 .input-field:focus {
   outline: none;
   border-color: #4ca7cc;
   box-shadow: 0 0 0 3px rgba(76, 167, 204, 0.25);
 }
 
-/* 비밀번호 규칙 및 경고 메시지 섹션 */
 .password-rules-section {
   margin-bottom: 1.5rem;
 }
 
 .rule-text {
   font-size: 0.75rem;
-  color: #a0a0a0; /* 연회색 */
+  color: #a0a0a0;
   line-height: 1.5;
   transition: color 0.2s ease-in-out;
 }
 
 .warning-text {
   font-size: 0.75rem;
-  color: #ef4444; /* 빨간색 경고 메시지 */
+  color: #ef4444;
   margin-top: 0.5rem;
   font-weight: 500;
 }
 
-/* 유효성 검사 실패 시 스타일 */
 .error-text {
   color: #ef4444 !important;
 }
@@ -229,7 +302,6 @@ const completeReset = () => {
   border-color: #ef4444 !important;
 }
 
-/* 완료 버튼 */
 .submit-button {
   width: 100%;
   display: flex;
@@ -237,7 +309,7 @@ const completeReset = () => {
   padding: 0.75rem 1rem;
   border-radius: 0.375rem;
   color: #ffffff;
-  background-color: #4ca7cc; /* 진한 하늘색 */
+  background-color: #4ca7cc;
   font-size: 0.875rem;
   font-weight: 500;
   transition: background-color 0.15s ease-in-out;
@@ -248,11 +320,10 @@ const completeReset = () => {
 }
 
 .submit-button:disabled {
-  background-color: #d1d5db; /* 비활성화 상태일 때 회색 */
+  background-color: #d1d5db;
   cursor: not-allowed;
 }
 
-/* 반응형 디자인 */
 @media (max-width: 640px) {
   .form-wrapper {
     padding: 1rem;

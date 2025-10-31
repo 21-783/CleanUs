@@ -1,12 +1,16 @@
 <template>
-  <div class="login-container">  
+  <HeaderView />
+  <div class="login-container">
     <div class="login-form-wrapper">
       <h2 class="form-title">Login</h2>
+      
+      <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+
       <div class="input-group">
         <input 
           type="text" 
-          placeholder="이메일" 
-          v-model="username" 
+          placeholder="example@pukyong.ac.kr" 
+          v-model="email" 
           class="login-input"
         >
       </div>
@@ -19,43 +23,118 @@
           class="login-input"
         >
       </div>
-      <button @click="handleLogin" class="login-button">로그인</button>
+      
+      <button @click="submitLogin" class="login-button" :disabled="isLoading">
+        {{ isLoading ? '로그인 중...' : '로그인' }}
+      </button>
     </div>
 
     <div class="link-group">
       <router-link to="/SignupView" class="auth-link">회원가입</router-link>
       <span class="divider">|</span>
-      <router-link to="/reset-password" class="auth-link">비밀번호 찾기</router-link>
+      <router-link to="/ForgetPW" class="auth-link">비밀번호 찾기</router-link>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router'; 
+import HeaderView from '@/components/HeaderView.vue';
 
-// 폴더 이미지를 사용하지 않으므로 아래 코드는 필요 없습니다.
-// import folderImage from '@/assets/Folderimage.png';
-
-// 입력 필드와 체크박스 상태를 위한 반응형 변수
-const username = ref('');
+const router = useRouter();
+const email = ref('');
 const password = ref('');
-const rememberLogin = ref(false);
-const ipSecurityOn = ref(true); 
+const errorMessage = ref(''); //  오류 메시지 상태
+const isLoading = ref(false); //  로딩 상태
 
-// 로그인 버튼 클릭 시 실행될 함수
-const handleLogin = () => {
-  console.log('로그인 시도:', {
-    username: username.value,
-    password: password.value,
-    rememberLogin: rememberLogin.value,
-    ipSecurityOn: ipSecurityOn.value
-  });
-  // 실제 로그인 로직 (API 호출 등)을 여기에 구현
-  alert('로그인 기능은 아직 구현되지 않았습니다.');
+// -------------------------------------------------------------------
+// 1. 이메일 도메인 유효성 검사 (computed)
+// -------------------------------------------------------------------
+const isPukyongEmailValid = computed(() => {
+    // 이메일 입력이 없으면 유효성 검사 통과
+    if (!email.value) return true; 
+    
+    // @pukyong.ac.kr로 끝나는지 확인
+    return email.value.endsWith('@pukyong.ac.kr');
+});
+
+// -------------------------------------------------------------------
+// 2. 로그인 로직 함수
+// -------------------------------------------------------------------
+const submitLogin = async () => {
+    errorMessage.value = ''; // 오류 메시지 초기화
+
+    // 1. 유효성 검사 (부경대 이메일 도메인)
+    if (!isPukyongEmailValid.value) {
+        errorMessage.value = "부경대학교 이메일(pukyong.ac.kr)만 가능합니다.";
+        return;
+    }
+
+    if (!email.value || !password.value) {
+        errorMessage.value = '이메일과 비밀번호를 모두 입력해주세요.';
+        return;
+    }
+    
+    isLoading.value = true;
+    
+    try {
+        // 2. 백엔드로 email, password 전송 (명세서의 POST /auth/login 사용)
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: email.value,
+                password: password.value,
+            }),
+        });
+
+        const data = await response.json();
+        
+        // 3. 백엔드 응답 처리
+        if (response.ok && data.message === 'Login successful') {
+            
+            // 4-1. 로그인 성공: 로컬스토리지 저장 및 페이지 이동
+            localStorage.setItem('userEmail', email.value); // 이메일만 저장
+            localStorage.setItem('authToken', data.token); // 토큰도 저장하는 것이 일반적
+            
+            // MainPage.vue로 이동 (라우터 이름이 'MainPage'라고 가정)
+            router.push({ name: 'MainPage' }); 
+            
+        } else {
+            // 4-2. 로그인 실패 메시지 출력
+            errorMessage.value = '로그인 정보가 다릅니다. 다시 입력해주세요.';
+            console.error('Login Failed:', data.message || '서버 응답 오류');
+        }
+
+    } catch (error) {
+        console.error('API 호출 중 오류 발생:', error);
+        errorMessage.value = '서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';
+    } finally {
+        isLoading.value = false;
+    }
 };
+
+
 </script>
 
 <style scoped>
+
+.error-message {
+    color: #e74c3c;
+    background-color: #fcebeb;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    font-size: 0.9em;
+    font-weight: 500;
+    width: 100%;
+    text-align: center;
+}
+
+/* 기존 스타일 코드 유지 */
 .login-container {
   display: flex;
   flex-direction: column;
@@ -84,13 +163,7 @@ const handleLogin = () => {
   margin-bottom: 30px;
 }
 
-/* 폴더 이미지를 사용하지 않으므로 아래 스타일은 제거 */
-/* .folder-background-image {
-  display: none;
-} */
-
 .login-overlay-content {
-  /* 폴더 이미지를 사용하지 않으므로 absolute 위치를 제거 */
   position: static;
   width: 100%;
   max-width: none;
@@ -148,8 +221,6 @@ const handleLogin = () => {
   color: #6c757d; /* 옅은 회색 */
 }
 
-/* IP 보안 토글 스위치 스타일 - 이 컴포넌트에는 없음 */
-/* .switch {} ... */
 
 .login-button {
   width: 100%;

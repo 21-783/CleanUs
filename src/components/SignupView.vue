@@ -2,12 +2,13 @@
   <div class="registration-container">
     <div class="form-wrapper">
       <div class="logo-section">
-        <div class="logo-text">로고 사진</div>
+        <img src="@/assets/logo.png" alt="로고" class="logo" />
       </div>
 
       <form @submit.prevent="submitForm">
         <h1 class="form-title">회원가입</h1>
 
+        <!-- 이메일 -->
         <div class="input-group">
           <label for="email" class="input-label">이메일</label>
           <div class="input-with-button">
@@ -15,7 +16,7 @@
               type="email"
               id="email"
               v-model="formData.email"
-              placeholder="example@example.com"
+              placeholder="example@pukyong.ac.kr"
               class="input-field"
               required
             />
@@ -23,16 +24,20 @@
               type="button"
               @click="sendVerificationEmail"
               class="verify-button"
-              :disabled="isEmailSent || isEmailVerified"
+              :disabled="isSendingEmail || !isPukyongEmailValid || isEmailVerified"
             >
-              {{ isEmailSent ? '재전송' : '인증하기' }}
+              {{ isSendingEmail ? '전송 중...' : (isEmailSent ? '재전송' : '인증하기') }}
             </button>
+          </div>
+          <div v-if="formData.email && !isPukyongEmailValid" class="message error-message">
+            이메일은 '@pukyong.ac.kr' 도메인만 사용할 수 있습니다.
           </div>
           <div v-if="isEmailSent" class="message success">
             인증번호가 전송되었습니다.
           </div>
         </div>
 
+        <!-- 인증번호 -->
         <div class="input-group" v-if="isEmailSent && !isEmailVerified">
           <label for="verification-code" class="input-label">인증번호</label>
           <div class="input-with-button">
@@ -40,6 +45,7 @@
               type="text"
               id="verification-code"
               v-model="verificationCode"
+              ref="codeInput"
               placeholder="6자리 인증번호"
               class="input-field"
               required
@@ -57,82 +63,101 @@
         <div v-if="isEmailVerified" class="message success">
           본인인증이 성공했습니다.
         </div>
+        
+        <div class="content-aligned-group"> 
+          <!-- 비밀번호 -->
+          <div class="input-group">
+            <label for="password" class="input-label">비밀번호</label>
+            <input
+              type="password"
+              id="password"
+              v-model="formData.password"
+              placeholder="비밀번호를 입력하세요"
+              class="input-field"
+              @blur="validatePassword"
+              required
+            />
+          </div>
+          <span v-if="errors.password" class="error-msg">{{ errors.password }}</span>
 
-        <div class="input-group">
-          <label for="password" class="input-label">비밀번호</label>
-          <input
-            type="password"
-            id="password"
-            v-model="formData.password"
-            placeholder="비밀번호를 입력하세요"
-            class="input-field"
-            required
-          />
+          <!-- 비밀번호 확인 -->
+          <div class="input-group">
+            <label for="confirm-password" class="input-label">비밀번호 재입력</label>
+            <input
+              type="password"
+              id="confirm-password"
+              v-model="formData.confirmPassword"
+              placeholder="비밀번호를 다시 입력하세요"
+              class="input-field"
+              @blur="validatePasswordConfirm"
+              required
+            />
+          </div>
+          <span v-if="errors.passwordConfirm" class="error-msg">{{ errors.passwordConfirm }}</span>
+        
+          <!-- 이름 -->
+          <div class="input-group">
+            <label for="name" class="input-label">이름</label>
+            <input
+              type="text"
+              id="name"
+              v-model="formData.name"
+              placeholder="이름을 입력하세요"
+              class="input-field"
+              required
+            />
+          </div>
+
+          <!-- 생년월일 -->
+          <div class="input-group">
+            <label for="dob" class="input-label">생년월일 (8자리)</label>
+            <input
+              type="text"
+              id="dob"
+              v-model="formData.dob"
+              placeholder="예: 19990101"
+              maxlength="8"
+              class="input-field"
+              required
+            />
+          </div>
+
+          <!-- 입학년도 -->
+          <div class="input-group">
+            <label for="enrollment-year" class="input-label">입학년도 (학번)</label>
+            <select
+              id="enrollment-year"
+              v-model="formData.enrollmentYear"
+              class="select-field"
+              required
+            >
+              <option disabled value="">입학년도를 선택하세요</option>
+              <option v-for="year in enrollmentYears" :key="year" :value="year">{{ year }}</option>
+            </select>
+          </div>
+
+          <!-- 학과 -->
+          <div class="input-group">
+            <label for="department" class="input-label">학과</label>
+            <select
+              id="department"
+              v-model="formData.department"
+              class="select-field"
+              required
+            >
+              <option disabled value="">학과를 선택하세요</option>
+              <option 
+                v-for="dept in majors" 
+                :key="dept.collegeName + (dept.departmentName || '')"
+                :value="dept.departmentName"
+              >
+                {{ dept.departmentName }} 
+              </option>
+            </select>
+          </div>
         </div>
 
-        <div class="input-group">
-          <label for="confirm-password" class="input-label">비밀번호 재입력</label>
-          <input
-            type="password"
-            id="confirm-password"
-            v-model="formData.confirmPassword"
-            placeholder="비밀번호를 다시 입력하세요"
-            class="input-field"
-            required
-          />
-        </div>
-
-        <div class="input-group">
-          <label for="name" class="input-label">이름</label>
-          <input
-            type="text"
-            id="name"
-            v-model="formData.name"
-            placeholder="이름을 입력하세요"
-            class="input-field"
-            required
-          />
-        </div>
-
-        <div class="input-group">
-          <label for="dob" class="input-label">생년월일 (8자리)</label>
-          <input
-            type="text"
-            id="dob"
-            v-model="formData.dob"
-            placeholder="예: 19990101"
-            maxlength="8"
-            class="input-field"
-            required
-          />
-        </div>
-
-        <div class="input-group">
-          <label for="enrollment-year" class="input-label">입학년도 (학번)</label>
-          <select
-            id="enrollment-year"
-            v-model="formData.enrollmentYear"
-            class="select-field"
-            required
-          >
-            <option value="" disabled selected>입학년도를 선택하세요</option>
-            <option v-for="year in enrollmentYears" :key="year" :value="year">{{ year }}</option>
-          </select>
-        </div>
-
-        <div class="input-group">
-          <label for="department" class="input-label">학과</label>
-          <select
-            id="department"
-            v-model="formData.department"
-            class="select-field"
-            required
-          >
-            <option value="" disabled selected>학과를 선택하세요</option>
-            <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
-          </select>
-        </div>
-
+        <!-- 체크박스 -->
         <div class="checkbox-group">
           <div class="checkbox-item">
             <input
@@ -171,6 +196,7 @@
           </div>
         </div>
 
+        <!-- 제출 버튼 -->
         <button
           type="submit"
           :disabled="!isFormValid"
@@ -184,10 +210,12 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import axios from 'axios';
+import { ref, computed, onMounted, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios'; 
 
-// 폼 데이터 상태 관리
+const router = useRouter(); 
+
 const formData = ref({
   email: '',
   password: '',
@@ -201,102 +229,185 @@ const formData = ref({
   isOver14: false,
 });
 
-// 이메일 인증 관련 상태 관리
+const errors = ref({ password: '', passwordConfirm: '' });
+const majors = ref([]); 
+const enrollmentYears = [2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015];
+
+// 이메일 인증 관련
 const isEmailSent = ref(false);
+const isSendingEmail = ref(false);
 const verificationCode = ref('');
 const isEmailVerified = ref(false);
+const codeInput = ref(null);
 
-// 드롭다운 리스트 데이터 (예시)
-const enrollmentYears = [2025, 2024, 2023, 2022, 2021, 2020];
-const departments = ['컴퓨터공학과', '경영학과', '전자공학과', '건축학과', '디자인학과'];
+const isPukyongEmailValid = computed(() => {
+  if (!formData.value.email) return true;
+  return /@pukyong\.ac\.kr$/.test(formData.value.email);
+});
 
-// 폼 유효성 검사 (모든 필수 필드와 체크박스가 선택되었는지 확인)
+const isPasswordValid = computed(() => !errors.value.password && formData.value.password.length > 0);
+const isPasswordMismatch = computed(() => errors.value.passwordConfirm !== '');
+
 const isFormValid = computed(() => {
   return (
+    isPukyongEmailValid.value && 
     formData.value.email &&
+    isEmailVerified.value &&
     formData.value.password &&
     formData.value.confirmPassword &&
     formData.value.name &&
-    formData.value.dob &&
+    /^\d{8}$/.test(formData.value.dob) &&
     formData.value.enrollmentYear &&
     formData.value.department &&
     formData.value.isRealName &&
     formData.value.isOver14 &&
-    formData.value.password === formData.value.confirmPassword && // 비밀번호 일치 확인
-    isEmailVerified.value // 이메일 인증 성공 여부 확인
+    isPasswordValid.value &&
+    !isPasswordMismatch.value
   );
 });
 
-// 이메일 인증 메일 전송
-const sendVerificationEmail = async () => {
-  if (!formData.value.email) {
-    alert("이메일을 입력해주세요.");
+// ---------------- 비밀번호 검사 ----------------
+const validatePassword = () => {
+  const pass = formData.value.password;
+  const email = formData.value.email.split('@')[0];
+  const hasLetter = /[A-Za-z]/.test(pass);
+  const hasDigit = /\d/.test(pass);
+  const hasSpecial = /[^a-zA-Z0-9\s]/.test(pass);
+  const isSequential = /(.)\1{2,}/.test(pass);
+
+  if (pass.length < 8 || pass.length > 16) {
+    errors.value.password = '비밀번호는 8자리 이상 16자리 이하로 입력하세요.';
     return;
   }
-  
+  if (!hasLetter || !hasDigit || !hasSpecial) {
+    errors.value.password = '영문, 숫자, 특수문자를 모두 포함해야 합니다.';
+    return;
+  }
+  if (isSequential) {
+    errors.value.password = '같은 문자가 3회 이상 연속될 수 없습니다.';
+    return;
+  }
+  if (email.length > 3 && pass.includes(email)) {
+    errors.value.password = '비밀번호는 이메일(ID)과 유사할 수 없습니다.';
+    return;
+  }
+  errors.value.password = '';
+  validatePasswordConfirm();
+};
+
+const validatePasswordConfirm = () => {
+  if (formData.value.password !== formData.value.confirmPassword) {
+    errors.value.passwordConfirm = '비밀번호가 일치하지 않습니다.';
+  } else {
+    errors.value.passwordConfirm = '';
+  }
+};
+
+// ---------------- 이메일 인증 ----------------
+const sendVerificationEmail = async () => {
+  if (!isPukyongEmailValid.value) {
+    alert("이메일은 '@pukyong.ac.kr'만 사용할 수 있습니다.");
+    return;
+  }
+
   try {
-    const response = await axios.post('/api/send-verification-email', {
-      email: formData.value.email
-    });
-    
-    if (response.data === "Email sent successfully!") {
+    isSendingEmail.value = true;
+    const res = await axios.post('/api/send-verification-email', { email: formData.value.email });
+    if (res.data.success) {
       alert("인증번호가 전송되었습니다.");
       isEmailSent.value = true;
+      await nextTick();
+      codeInput.value?.focus();
     } else {
-      alert("이메일 전송에 실패했습니다. 다시 시도해주세요.");
+      alert("이메일 전송에 실패했습니다.");
     }
-  } catch (error) {
-    console.error("이메일 전송 실패:", error);
-    alert("이메일 전송에 실패했습니다. 서버를 확인해주세요.");
+  } catch (err) {
+    console.error("이메일 전송 실패:", err);
+    alert("이메일 전송에 실패했습니다.");
+  } finally {
+    isSendingEmail.value = false;
   }
 };
 
-// 인증번호 확인
 const checkVerificationCode = async () => {
-  if (!verificationCode.value) {
-    alert("인증번호를 입력해주세요.");
+  if (!verificationCode.value) return alert("인증번호를 입력해주세요.");
+
+  try {
+    const res = await axios.post('/api/verify-code', {
+      email: formData.value.email,
+      code: verificationCode.value
+    });
+    if (res.data.success) {
+      isEmailVerified.value = true;
+      alert("본인인증이 성공했습니다.");
+    } else {
+      alert("인증번호가 일치하지 않습니다.");
+    }
+  } catch (err) {
+    console.error("인증 확인 실패:", err);
+    alert("인증 확인 중 오류가 발생했습니다.");
+  }
+};
+
+// ---------------- 회원가입 ----------------
+const submitForm = async () => {
+  if (!formData.value.isTreasurer) {
+    alert("총무만 회원가입할 수 있습니다.");
     return;
   }
 
-  // TODO: 백엔드에 인증번호 확인을 위한 API 엔드포인트를 추가해야 합니다.
-  // 이 부분은 현재 프론트엔드에서만 임시로 처리합니다.
+  if (!/^\d{8}$/.test(formData.value.dob)) {
+    alert("생년월일은 8자리 숫자(YYYYMMDD)로 입력해야 합니다.");
+    return;
+  }
+
   try {
-    // 실제 백엔드 API 호출 예시 (아직 구현되지 않음)
-    // const response = await axios.post('/api/verify-code', {
-    //   email: formData.value.email,
-    //   code: verificationCode.value
-    // });
-    
-    // 이메일 인증이 성공했을 경우
-    // if (response.data === "Verification successful!") {
-    isEmailVerified.value = true;
-    alert("본인인증이 성공했습니다.");
-    // } else {
-    //   alert("인증번호가 올바르지 않습니다.");
-    // }
+    const payload = { ...formData.value };
+    const response = await axios.post('/api/register', payload);
+    if (response.data.message === "Membership registration DB reflected successfully") {
+      alert('회원가입이 완료되었습니다. 로그인 페이지로 이동합니다.');
+      router.push({ name: 'LoginView' });
+    } else {
+      alert("서버가 불안정합니다.");
+    }
   } catch (error) {
-    console.error("인증번호 확인 실패:", error);
-    alert("인증번호 확인 중 오류가 발생했습니다.");
+    console.error("회원가입 API 오류:", error);
+    alert("서버 오류가 발생했습니다.");
   }
 };
 
-// 회원가입 완료 버튼 클릭 핸들러
-const submitForm = () => {
-  if (isFormValid.value) {
-    console.log('회원가입이 완료되었습니다. 폼 데이터:', formData.value);
-    // 여기에 실제 회원가입 로직을 구현합니다 (API 호출 등).
-  } else {
-    console.log('폼을 모두 채워주세요.');
-    alert('모든 필수 항목을 입력하고 동의해주세요.');
+// ---------------- 학과 불러오기 ----------------
+const fetchMajors = async () => {
+  try {
+    const res = await axios.get('http://localhost:8000/api/majors');
+    majors.value = Array.isArray(res.data)
+      ? res.data.filter(m => m.departmentName)
+      : [];
+  } catch (err) {
+    console.error('학과 데이터 로드 실패:', err);
   }
 };
+
+onMounted(fetchMajors);
 </script>
 
 <style scoped>
-/* 전체 컨테이너 */
+.content-aligned-group {
+  width: 95%;
+}
+
+.error-msg, .error-message {
+  display: block;
+  font-size: 0.75rem;
+  color: #ef4444;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+  padding-left: 0.75rem;
+}
+
 .registration-container {
   min-height: 100vh;
-  background-color: #ffffff; /* 하얀 배경색 */
+  background-color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -304,22 +415,21 @@ const submitForm = () => {
   font-family: Arial, sans-serif;
 }
 
-/* 폼 래퍼 */
 .form-wrapper {
   width: 100%;
   max-width: 42rem;
   background-color: #ffffff;
-  border: 2px solid #f2f2f2; /* 하늘색 테두리 */
+  border: 2px solid #f2f2f2;
   border-radius: 0.75rem;
   padding: 2rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-/* 로고 섹션 */
 .logo-section {
   display: flex;
   justify-content: flex-start;
   margin-bottom: 1.5rem;
+   height: 40px; /* 로고 높이 */
 }
 
 .logo-text {
@@ -328,7 +438,6 @@ const submitForm = () => {
   color: #1f2937;
 }
 
-/* 폼 제목 */
 .form-title {
   font-size: 1.5rem;
   font-weight: bold;
@@ -337,9 +446,9 @@ const submitForm = () => {
   margin-bottom: 2rem;
 }
 
-/* 입력 그룹 (라벨과 입력 필드) */
 .input-group {
   margin-bottom: 1rem;
+  weight:95%;
 }
 
 .input-label {
@@ -350,20 +459,17 @@ const submitForm = () => {
   margin-bottom: 0.25rem;
 }
 
-/* 입력 필드 (input, select) */
 .input-field,
 .select-field {
-  display: block;
   width: 100%;
   padding: 0.75rem;
   border-radius: 0.375rem;
   border: 2px solid #f2f2f2;
   font-size: 0.875rem;
   color: #1f2937;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  transition: border-color 0.15s ease-in-out;
 }
 
-/* 포커스 시 스타일 */
 .input-field:focus,
 .select-field:focus {
   outline: none;
@@ -371,35 +477,27 @@ const submitForm = () => {
   box-shadow: 0 0 0 3px rgba(76, 167, 204, 0.25);
 }
 
-/* 이메일 입력 그룹 */
 .input-with-button {
   display: flex;
 }
 
-.input-with-button .input-field {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-/* 이메일 인증 버튼 */
 .verify-button {
   padding: 0.75rem 1rem;
   border-radius: 0.375rem;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
-  background-color: #88d4ffff; /* 하늘색 */
+  background-color: #88d4ff;
   color: #ffffff;
   font-size: 0.875rem;
   font-weight: 500;
   transition: background-color 0.15s ease-in-out;
-  white-space: nowrap; /* 글자가 줄바꿈되지 않도록 수정 */
+  white-space: nowrap;
 }
 
 .verify-button:hover {
   background-color: #4ca7cc;
 }
 
-/* 체크박스 그룹 */
 .checkbox-group {
   margin-bottom: 1.5rem;
 }
@@ -425,11 +523,10 @@ const submitForm = () => {
 }
 
 .checkbox-input:checked {
-  background-color: #62cff6; /* 하늘색 */
+  background-color: #62cff6;
   border-color: #62cff6;
 }
 
-/* 회원가입 완료 버튼 */
 .submit-button {
   width: 100%;
   display: flex;
@@ -437,7 +534,7 @@ const submitForm = () => {
   padding: 0.75rem 1rem;
   border-radius: 0.375rem;
   color: #ffffff;
-  background-color: #4ca7cc; /* 진한 하늘색 */
+  background-color: #4ca7cc;
   font-size: 0.875rem;
   font-weight: 500;
   transition: background-color 0.15s ease-in-out;
@@ -448,15 +545,8 @@ const submitForm = () => {
 }
 
 .submit-button:disabled {
-  background-color: #d1d5db; /* 비활성화 상태일 때 회색 */
+  background-color: #d1d5db;
   cursor: not-allowed;
-}
-
-/* 반응형 디자인 */
-@media (max-width: 640px) {
-  .form-wrapper {
-    padding: 1rem;
-  }
 }
 
 .message {
@@ -464,7 +554,8 @@ const submitForm = () => {
   margin-top: 0.5rem;
   text-align: center;
 }
+
 .success {
-  color: #4CAF50; /* 녹색 */
+  color: #4CAF50;
 }
 </style>

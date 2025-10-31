@@ -4,63 +4,92 @@
 
     <div class="account-display-card">
       <h3>은행 계좌 등록</h3>
-      <div v-if="registeredAccount">
+
+      <!-- 🚨 로딩 중 -->
+      <div v-if="isLoading">
+        <p class="loading-text">계좌 정보를 불러오는 중...</p>
+      </div>
+
+      <!-- ✅ 등록된 계좌 있음 -->
+      <div v-else-if="registeredAccount">
         <p class="status-success"><strong>✅ 등록 완료</strong></p>
         <p><strong>은행명:</strong> {{ registeredAccount.bankName }}</p>
-        <p><strong>계좌번호:</strong> {{ registeredAccount.accountNum }}</p>
+        <p><strong>계좌번호:</strong> {{ maskedAccountNum }}</p>
         <p><strong>예금주:</strong> {{ registeredAccount.ownerName }}</p>
+        <p class="registration-date">등록일: {{ registeredAccount.registeredAt }}</p>
         <button @click="goToRegistration" class="btn-update">계좌 정보 수정</button>
       </div>
+
+      <!-- ❌ 등록된 계좌 없음 -->
       <div v-else>
         <p class="no-account">정산에 사용할 은행 계좌 정보가 없습니다.</p>
         <button @click="goToRegistration" class="btn-connect">계좌 정보 등록</button>
       </div>
+
+      <!-- ⚠️ 오류 메시지 표시 -->
+      <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
 
 const router = useRouter();
-const route = useRoute(); // 쿼리 파라미터를 읽기 위해 필요
+const registeredAccount = ref(null);
+const isLoading = ref(false);
+const errorMessage = ref('');
 
-const registeredAccount = ref(null); // 등록된 은행 계좌 정보
+// ✅ 1. API 호출 함수 (GET /user/account-check)
+const fetchAccountInfo = async () => {
+  isLoading.value = true;
+  errorMessage.value = '';
 
-// 팝업 뷰 (계좌 등록 페이지)로 이동하는 함수
-const goToRegistration = () => {
-    // 'PopupView'는 router/index.js에 정의된 계좌 등록 페이지의 name이어야 합니다.
-    router.push({ name: 'PopupView' }); 
-};
+  try {
+    const response = await axios.get('/user/account-check');
+    const data = response.data;
 
-// 쿼리 파라미터에서 계좌 정보를 읽어와 상태에 저장
-const loadAccountFromQuery = () => {
-    const { bank, account, owner } = route.query;
-    
-    // 쿼리 파라미터가 모두 존재할 경우 등록된 것으로 간주
-    if (bank && account && owner) {
-        registeredAccount.value = {
-            bankName: bank,
-            accountNum: account,
-            ownerName: owner
-        };
-        // 🚨 중요: URL에 계좌 정보가 노출되지 않도록 쿼리 파라미터를 제거합니다.
-        // router.replace({ query: {} }); // 현재는 주석 처리 (테스트 용이성을 위해)
+    // 응답 필드 확인 후 등록된 계좌인지 판별
+    if (data.account_last4) {
+      registeredAccount.value = {
+        bankName: data.bank_name,
+        accountLast4: data.account_last4,
+        ownerName: data.holder_name,
+        registeredAt: data.registered_at
+          ? data.registered_at.slice(0, 10)
+          : '정보 없음',
+      };
+    } else {
+      registeredAccount.value = null;
     }
+  } catch (error) {
+    console.error('계좌 정보 로딩 중 오류 발생:', error);
+    errorMessage.value = '서버에서 계좌 정보를 불러오는 중 오류가 발생했습니다.';
+    registeredAccount.value = null;
+  } finally {
+    isLoading.value = false;
+  }
 };
 
-// 지갑 관련 기존 로직 (기능 구현은 생략)
-const checkExistingConnection = async () => {
-  // 예시 데이터:
-  // walletAddress.value = '0x123...abc';
-  // balance.value = '1.234';
+// ✅ 2. 계좌번호 마스킹 처리 (예: *********1234)
+const maskedAccountNum = computed(() => {
+  const last4 = registeredAccount.value?.accountLast4;
+  if (!last4 || last4.length !== 4) {
+    return '계좌번호 정보 오류';
+  }
+  return '*********' + last4;
+});
+
+// ✅ 3. 등록 페이지로 이동
+const goToRegistration = () => {
+  router.push({ name: 'PopupView' });
 };
 
+// ✅ 4. 컴포넌트 마운트 시 데이터 불러오기
 onMounted(() => {
-  checkExistingConnection();
-  // 페이지 로드 시 URL 쿼리 파라미터에 등록 정보가 있는지 확인
-  loadAccountFromQuery(); 
+  fetchAccountInfo();
 });
 </script>
 
@@ -79,7 +108,7 @@ h2 {
   margin-bottom: 25px;
 }
 
-.wallet-box, .account-display-card {
+.account-display-card {
   background-color: #fff;
   border: 1px solid #ddd;
   padding: 20px;
@@ -101,22 +130,32 @@ h2 {
 }
 
 .status-success {
-    color: #28a745;
-    font-size: 1.1rem;
-    margin-bottom: 15px;
+  color: #28a745;
+  font-size: 1.1rem;
+  margin-bottom: 15px;
+}
+
+.loading-text {
+  color: #666;
+  font-style: italic;
+}
+
+.error-text {
+  color: #e74c3c;
+  margin-top: 15px;
+  font-size: 0.95rem;
 }
 
 .account-display-card p {
-    font-size: 1rem;
-    margin: 8px 0;
-    color: #333;
+  font-size: 1rem;
+  margin: 8px 0;
+  color: #333;
 }
 
-.divider {
-  border: 0;
-  height: 1px;
-  background-color: #eee;
-  margin: 30px 0;
+.registration-date {
+  font-size: 0.85rem;
+  color: #888;
+  margin-top: 10px;
 }
 
 /* 버튼 스타일 */
@@ -128,14 +167,6 @@ button {
   font-weight: 600;
   transition: background-color 0.3s;
   margin-top: 10px;
-}
-
-.btn-wallet {
-  background-color: #42b983;
-  color: white;
-}
-.btn-wallet:hover {
-  background-color: #369b71;
 }
 
 .btn-connect {

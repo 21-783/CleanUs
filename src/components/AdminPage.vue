@@ -3,19 +3,31 @@
   <div class="admin-container">
     <header class="admin-header">
       <h1> 사용자 설정 </h1>
+      
+      <!-- 🚨 0. 서브 타이틀: 클릭 가능한 링크 기능 추가 -->
+      <p class="admin-subtitle">
+        <span @click="scrollToSection('account')" class="scroll-link">계좌 설정</span> 
+        | 
+        <span @click="scrollToSection('ledger')" class="scroll-link">장부 설정</span> 
+        | 
+        <span @click="scrollToSection('user')" class="scroll-link">사용자 정보</span>
+      </p>
     </header>
     
     <main class="admin-main">
       
-      <section class="admin-section account-settings">
+      <!-- 🚨 ref 추가: 스크롤 대상으로 지정 -->
+      <section class="admin-section account-settings" ref="accountRef">
         <AccountSettings />
       </section>
       
-      <section class="admin-section ledger-settings divider-boundary">
+      <!-- 🚨 ref 추가 -->
+      <section class="admin-section ledger-settings" ref="ledgerRef">
         <LedgerSettings />
       </section>
       
-      <section class="admin-section user-info">
+      <!-- 🚨 ref 추가 -->
+      <section class="admin-section user-info" ref="userRef">
         <UserInfo />
       </section>
       
@@ -24,13 +36,37 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'; // ref import
 import AccountSettings from './AccountSetting';
 import LedgerSettings from './LedgerSetting';
 import UserInfo from './UserInfo';
 import HeaderView from '@/components/HeaderView.vue';
-// 🚨 AccountSetting, LedgerSetting, UserInfo 컴포넌트 내부의 CSS도 
-//   `flex: 1`이 적용된 부모 컨테이너가 아닌 경우, 너비를 100%로 설정해야 
-//   이 레이아웃이 제대로 작동합니다.
+
+// 🚨 1. 스크롤 대상 ref 정의
+const accountRef = ref(null);
+const ledgerRef = ref(null);
+const userRef = ref(null);
+
+// 🚨 2. 스크롤 함수 정의
+const scrollToSection = (sectionName) => {
+    let targetRef;
+    
+    if (sectionName === 'account') {
+        targetRef = accountRef;
+    } else if (sectionName === 'ledger') {
+        targetRef = ledgerRef;
+    } else if (sectionName === 'user') {
+        targetRef = userRef;
+    }
+
+    if (targetRef.value) {
+        targetRef.value.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' // 섹션을 뷰포트 상단에 맞춥니다.
+        });
+    }
+};
+
 </script>
 
 <style scoped>
@@ -39,19 +75,20 @@ import HeaderView from '@/components/HeaderView.vue';
 /* ================================================= */
 
 .admin-container {
-  /* 이미지의 여백을 고려하여 max-width와 margin 조정 */
-  max-width: 1200px; 
-  margin: 50px auto; /* HeaderView 아래 여백 확보 */
+  max-width: 800px; 
+  margin: 50px auto; 
   padding: 30px;
-  background-color: #f0f4f8; /* 배경색 유지 */
+  background-color: #f0f4f8; 
   border-radius: 12px;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05); /* 그림자 약하게 */
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
   font-family: 'Arial', sans-serif;
 }
+
 .admin-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 30px; 
 }
+
 .admin-header h1 {
   color: #2c3e50;
   font-size: 2.5rem;
@@ -59,49 +96,50 @@ import HeaderView from '@/components/HeaderView.vue';
   margin: 0;
 }
 
+/* 0. 서브 타이틀 스타일 */
+.admin-subtitle {
+  font-size: 0.9rem;
+  color: #6c7a89;
+  margin-top: 5px;
+  font-weight: 400;
+  /* 🚨 텍스트 내 링크 사이의 간격 제거 */
+  user-select: none; 
+}
+
+/* 🚨 새로 추가: 스크롤 링크 스타일 */
+.scroll-link {
+    cursor: pointer;
+    color: #007bff; /* 링크 색상 */
+    transition: color 0.2s;
+    padding: 0 5px; /* 클릭 영역 확보 */
+    font-weight: 500;
+}
+.scroll-link:hover {
+    color: #0056b3; /* 호버 시 색상 변경 */
+    text-decoration: underline;
+}
+
+
 /* ================================================= */
-/* 2. 메인 콘텐츠 (Flex 레이아웃 및 영역 공간 일정하게 만들기) */
+/* 2. 메인 콘텐츠 (수직 Flex 레이아웃 적용) */
 /* ================================================= */
 
 .admin-main {
-  display: flex; /* Flexbox 활성화 */
-  justify-content: space-between; /* 요소들을 사이좋게 배치 */
-  align-items: stretch; /* 🚨 모든 섹션의 높이를 동일하게 맞춤 (가장 중요) */
-  gap: 0; /* 섹션 사이 간격은 구분선이 담당하므로 0으로 설정 */
-  /* 각 섹션 컴포넌트를 담는 영역이므로 padding 제거 */
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center; 
 }
 
 /* 각 컴포넌트(섹션) 영역 스타일 */
 .admin-section {
-  flex: 1; /* 🚨 각 섹션이 공간을 정확히 동일하게 차지하도록 설정 (너비 균등) */
+  width: 80%; 
+  max-width: 800px; /* 중앙에 적당한 너비로 제한 */
+  
   background-color: #ffffff;
   padding: 25px; 
-  /* 🚨 이 컴포넌트 자체가 이미지에서 보이는 카드 박스입니다. */
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
   border-radius: 10px;
-  margin: 0 10px; /* 각 섹션 좌우에 여백을 주어 중앙에 정렬되도록 함 */
-  min-width: 250px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  margin: 0;
 }
-
-/* ================================================= */
-/* 3. 구분선 추가 (Border 이용) */
-/* ================================================= */
-
-/* 장부 설정 섹션에 오른쪽 구분선 추가 */
-.account-settings {
-  border-right: 1px solid #e0e0e0;
-}
-
-/* 장부 설정 섹션에 오른쪽 구분선 추가 (이 섹션은 왼쪽 경계도 있으므로 클래스명을 명확히 함) */
-.ledger-settings {
-  border-right: 1px solid #e0e0e0;
-}
-
-/* 사용자 정보 섹션은 가장 오른쪽이므로 구분선 없음 */
-.user-info {
-  /* border-right: none; (기본값) */
-}
-
-/* 구분선이 전체 컨테이너의 흰색 배경 위에 깔끔하게 보이도록, 
-   admin-main의 여백을 제거하고 섹션에 마진을 부여하여 간격을 만들었습니다. */
 </style>

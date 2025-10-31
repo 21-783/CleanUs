@@ -2,7 +2,7 @@
   <div>
     <h2>사용자 정보</h2>
     <div v-if="user" class="info-box">
-      <p><strong>이름:</strong> {{ user.name }}</p>
+      <p><strong>이름:</strong> {{ user.name }}</p> 
       <p><strong>이메일:</strong> {{ user.email }}</p>
       <p><strong>소속:</strong> {{ user.affiliation }}</p>
       <p><strong>가입 날짜:</strong> {{ user.joinDate }}</p>
@@ -15,6 +15,7 @@
       <p>사용자 정보를 불러오는 중...</p>
     </div>
 
+    <!-- ✅ 탈퇴 확인 모달 -->
     <div v-if="isModalOpen" class="modal-overlay">
       <div class="modal-content">
         <h3>정말 탈퇴하시겠습니까?</h3>
@@ -30,29 +31,33 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';   // ✅ 추가
+import axios from 'axios';
+
+const router = useRouter();
 
 const user = ref(null);
 const isModalOpen = ref(false);
 
-// 사용자 정보 불러오기
+// ✅ 사용자 정보 불러오기
 const fetchUserInfo = async () => {
   try {
-    // TODO: 실제 서버 API 호출
-    // const response = await fetch('/api/user-info');
-    // user.value = await response.json();
-    
-    // 임시 데이터
+    const response = await axios.get('/api/user/info');
+    const data = response.data;
+
     user.value = {
-      name: '홍길동',
-      email: 'gildong@pukyong.ac.kr',
-      affiliation: '학생회명(정보융합대학)',
-      joinDate: '2025-01-01'
+      name: data.users_name || '이름 정보 없음', // ✅ 실제 필드명이 있다면 수정
+      email: data.users_email || '이메일 정보 없음',
+      affiliation: data.group_name || '소속 정보 없음',
+      joinDate: data.users_created_at ? data.users_created_at.slice(0, 10) : '날짜 정보 없음'
     };
   } catch (error) {
     console.error("사용자 정보 로딩 중 오류 발생:", error);
+    user.value = null;
   }
 };
 
+// ✅ 탈퇴 모달 제어
 const showWithdrawalModal = () => {
   isModalOpen.value = true;
 };
@@ -61,28 +66,27 @@ const cancelWithdrawal = () => {
   isModalOpen.value = false;
 };
 
+// ✅ 회원 탈퇴
 const confirmWithdrawal = async () => {
   try {
-    // TODO: 서버에 탈퇴 요청
-    // const response = await fetch('/api/user-withdrawal', { method: 'POST' });
-    // if (response.ok) {
-    //   alert("성공적으로 탈퇴되었습니다.");
-    //   // TODO: 로그아웃 또는 다른 페이지로 리다이렉트
-    // } else {
-    //   alert("탈퇴 실패. 다시 시도해 주세요.");
-    // }
-    alert("성공적으로 탈퇴되었습니다. (임시 메시지)");
-    isModalOpen.value = false;
+    const response = await axios.post('/api/user/leave');
 
+    if (response.data.message?.includes('Permanently delete your account')) {
+      alert("탈퇴되었습니다.");
+      isModalOpen.value = false;
+      router.push({ name: 'MainView' }); // ✅ 메인 페이지로 이동
+    } else {
+      alert("다시 시도해주십시오.");
+      isModalOpen.value = false;
+    }
   } catch (error) {
     console.error("탈퇴 처리 중 오류 발생:", error);
-    alert("탈퇴 처리 중 오류가 발생했습니다.");
+    alert("다시 시도해주십시오.");
+    isModalOpen.value = false;
   }
 };
 
-onMounted(() => {
-  fetchUserInfo();
-});
+onMounted(fetchUserInfo);
 </script>
 
 <style scoped>

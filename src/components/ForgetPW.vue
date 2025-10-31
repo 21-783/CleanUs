@@ -1,17 +1,19 @@
 <template>
   <div class="reset-password-container">
     <div class="form-wrapper">
-      <!-- 로고 섹션: 왼쪽 정렬 -->
       <div class="logo-section">
-        <!-- 실제 로고 이미지 경로로 변경하세요. -->
-        <div class="logo-text">로고 사진</div>
+        <img 
+          src="@/assets/logo.png" 
+          alt="로고" 
+          class="logo" 
+          @click="goToMain"
+        />
       </div>
 
-      <!-- 비밀번호 찾기 폼 -->
       <form @submit.prevent="resetPassword">
         <h1 class="form-title">비밀번호 찾기</h1>
 
-        <!-- 이름 입력칸 -->
+        <!-- 이름 입력 -->
         <div class="input-group">
           <label for="name" class="input-label">이름</label>
           <input
@@ -24,7 +26,7 @@
           />
         </div>
 
-        <!-- 이메일 입력칸 | 이메일 인증 버튼 -->
+        <!-- 이메일 입력 및 인증 -->
         <div class="input-group">
           <label for="email" class="input-label">이메일</label>
           <div class="input-with-button">
@@ -32,37 +34,64 @@
               type="email"
               id="email"
               v-model="formData.email"
-              placeholder="example@example.com"
+              placeholder="example@pukyong.ac.kr"
               class="input-field"
-              :disabled="isEmailVerified"
+              :disabled="isEmailVerified || isCodeSent"
               required
             />
             <button
               type="button"
               @click="sendVerificationCode"
-              :disabled="!formData.email || isEmailVerified"
+              :disabled="!isPukyongEmailValid || !formData.email || isEmailVerified || isSending"
               class="verify-button"
             >
-              인증하기
+              {{ isSending ? '전송 중...' : (isCodeSent ? '재전송' : '인증하기') }}
             </button>
+          </div>
+          <div v-if="formData.email && !isPukyongEmailValid" class="message error-message">
+            이메일은 '@pukyong.ac.kr' 도메인만 사용할 수 있습니다.
+          </div>
+          <div v-if="isCodeSent && !isEmailVerified" class="message success-message">
+            인증번호가 전송되었습니다.
           </div>
         </div>
 
-        <!-- 이메일 인증번호 입력칸 (인증번호 발송 후 표시) -->
-        <div class="input-group" v-if="isCodeSent">
+        <!-- 인증번호 입력 -->
+        <div class="input-group" v-if="isCodeSent && !isEmailVerified">
           <label for="verification-code" class="input-label">이메일 인증번호</label>
-          <input
-            type="text"
-            id="verification-code"
-            v-model="formData.verificationCode"
-            placeholder="인증번호를 입력하세요"
-            class="input-field"
-            :disabled="isEmailVerified"
-            required
-          />
+          <div class="input-with-button">
+            <input
+              type="text"
+              id="verification-code"
+              v-model="formData.verificationCode"
+              placeholder="인증번호를 입력하세요"
+              class="input-field"
+              ref="codeInput"
+              required
+            />
+            <button
+              type="button"
+              @click="verifyCode"
+              :disabled="!formData.verificationCode || isVerifying"
+              class="verify-button"
+            >
+              {{ isVerifying ? '확인 중...' : '확인' }}
+            </button>
+          </div>
+          <div 
+            v-if="verificationMessage" 
+            :class="['message', verificationSuccess ? 'success-message' : 'error-message']"
+          >
+            {{ verificationMessage }}
+          </div>
+        </div>
+        
+        <!-- 인증 완료 안내 -->
+        <div v-if="isEmailVerified" class="message success-message verified-message">
+          인증이 완료되었습니다. 이제 비밀번호 재설정을 진행하세요.
         </div>
 
-        <!-- 비밀번호 재설정 버튼 -->
+        <!-- 비밀번호 재설정 이동 버튼 -->
         <button
           type="submit"
           :disabled="!isFormValid"
@@ -76,9 +105,13 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
+import axios from 'axios';
 
-// 폼 데이터 상태 관리
+const router = useRouter();
+
+// 폼 상태
 const formData = ref({
   name: '',
   email: '',
@@ -88,46 +121,123 @@ const formData = ref({
 // 인증 관련 상태
 const isCodeSent = ref(false);
 const isEmailVerified = ref(false);
+const verificationMessage = ref('');
+const verificationSuccess = ref(false);
+const isSending = ref(false);
+const isVerifying = ref(false);
+const codeInput = ref(null);
 
-// 폼 유효성 검사 (모든 필수 필드와 이메일 인증 상태 확인)
-const isFormValid = computed(() => {
-  return (
-    formData.value.name &&
-    formData.value.email &&
-    isEmailVerified.value
-  );
+// 메인으로 이동
+const goToMain = () => router.push({ name: 'MainView' });
+
+// 이메일 도메인 검사
+const isPukyongEmailValid = computed(() => {
+  if (!formData.value.email) return true;
+  return /@pukyong\.ac\.kr$/.test(formData.value.email);
 });
 
-// 이메일 인증번호 발송 (실제 로직을 여기에 구현)
-const sendVerificationCode = () => {
-  console.log(`${formData.value.email}로 인증번호를 보냅니다.`);
-  isCodeSent.value = true;
-  // 실제 API 호출로 인증번호를 보내는 로직을 구현해야 합니다.
-  // 이 예제에서는 시뮬레이션으로 3초 후 인증 완료 상태로 변경합니다.
-  setTimeout(() => {
-    isEmailVerified.value = true;
-    console.log('이메일 인증이 완료되었습니다.');
-  }, 3000);
+// 인증번호 전송
+const sendVerificationCode = async () => {
+  if (!isPukyongEmailValid.value) {
+    alert("이메일은 '@pukyong.ac.kr' 도메인만 사용할 수 있습니다.");
+    return;
+  }
+
+  try {
+    isSending.value = true;
+    const response = await axios.post('/api/email-verification/send', {
+      email: formData.value.email
+    });
+
+    if (response.data.message === "Verification code sent successfully") {
+      isCodeSent.value = true;
+      verificationMessage.value = '';
+      alert("인증번호가 전송되었습니다.");
+      await nextTick();
+      codeInput.value?.focus();
+    } else {
+      alert("인증번호 전송에 실패했습니다. 다시 시도해주세요.");
+    }
+  } catch (error) {
+    console.error("이메일 전송 실패:", error);
+    alert("서버 오류로 인증번호 전송에 실패했습니다.");
+  } finally {
+    isSending.value = false;
+  }
 };
 
-// 비밀번호 재설정 버튼 클릭 핸들러
-const resetPassword = () => {
-  if (isFormValid.value) {
-    console.log('비밀번호 재설정 페이지로 이동합니다.');
-    // 이 부분에 비밀번호 재설정 페이지로 이동하는 라우팅 로직을 추가하세요.
-    // 예: router.push('/reset-password-page');
-    alert('비밀번호 재설정 페이지로 이동합니다.');
-  } else {
-    alert('모든 정보를 올바르게 입력하고 이메일 인증을 완료해주세요.');
+// 인증번호 확인
+const verifyCode = async () => {
+  if (!formData.value.verificationCode) {
+    alert("인증번호를 입력해주세요.");
+    return;
   }
+
+  try {
+    isVerifying.value = true;
+    const response = await axios.post('/api/email-verification/verify', {
+      email: formData.value.email,
+      code: formData.value.verificationCode
+    });
+
+    if (response.data.message === "Verification successful") {
+      isEmailVerified.value = true;
+      verificationSuccess.value = true;
+      verificationMessage.value = "인증이 완료되었습니다.";
+    } else {
+      verificationSuccess.value = false;
+      verificationMessage.value = "인증번호가 올바르지 않습니다.";
+    }
+  } catch (error) {
+    console.error("인증 실패:", error);
+    verificationSuccess.value = false;
+    verificationMessage.value = "서버 오류로 인증에 실패했습니다.";
+  } finally {
+    isVerifying.value = false;
+  }
+};
+
+// 폼 유효성 검사
+const isFormValid = computed(() =>
+  formData.value.name && formData.value.email && isEmailVerified.value
+);
+
+// 비밀번호 재설정 페이지로 이동
+const resetPassword = () => {
+  if (!isFormValid.value) {
+    alert('모든 정보를 올바르게 입력하고 이메일 인증을 완료해주세요.');
+    return;
+  }
+
+  // 실제 비밀번호 재설정 페이지 이동
+  router.push({ name: 'GotoPW', query: { email: formData.value.email } });
 };
 </script>
 
 <style scoped>
-/* 전체 컨테이너 */
+.message {
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  padding-left: 0.75rem;
+}
+.error-message {
+  color: #ef4444;
+}
+.success-message {
+  color: #10b981;
+}
+.verified-message {
+  padding: 1rem;
+  border: 1px solid #10b981;
+  border-radius: 0.5rem;
+  text-align: center;
+  font-weight: bold;
+  margin-top: 1rem;
+}
+
 .reset-password-container {
   min-height: 100vh;
-  background-color: #ffffff; /* 하얀 배경색 */
+  background-color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -135,31 +245,29 @@ const resetPassword = () => {
   font-family: Arial, sans-serif;
 }
 
-/* 폼 래퍼 */
 .form-wrapper {
   width: 100%;
   max-width: 42rem;
   background-color: #ffffff;
-  border: 2px solid #f2f2f2; /* 연회색 테두리 */
+  border: 2px solid #f2f2f2;
   border-radius: 0.75rem;
   padding: 2rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-/* 로고 섹션 */
 .logo-section {
   display: flex;
   justify-content: flex-start;
   margin-bottom: 1.5rem;
+  height: 40px;
 }
 
-.logo-text {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #1f2937;
+.logo {
+  cursor: pointer;
+  height: 100%;
+  width: auto;
 }
 
-/* 폼 제목 */
 .form-title {
   font-size: 1.5rem;
   font-weight: bold;
@@ -168,7 +276,6 @@ const resetPassword = () => {
   margin-bottom: 2rem;
 }
 
-/* 입력 그룹 (라벨과 입력 필드) */
 .input-group {
   margin-bottom: 1rem;
 }
@@ -181,26 +288,22 @@ const resetPassword = () => {
   margin-bottom: 0.25rem;
 }
 
-/* 입력 필드 (input, select) */
 .input-field {
-  display: block;
   width: 100%;
   padding: 0.75rem;
   border-radius: 0.375rem;
   border: 2px solid #f2f2f2;
   font-size: 0.875rem;
   color: #1f2937;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  transition: border-color 0.15s ease-in-out;
 }
 
-/* 포커스 시 스타일 */
 .input-field:focus {
   outline: none;
   border-color: #4ca7cc;
   box-shadow: 0 0 0 3px rgba(76, 167, 204, 0.25);
 }
 
-/* 이메일 입력 그룹 */
 .input-with-button {
   display: flex;
 }
@@ -210,13 +313,12 @@ const resetPassword = () => {
   border-bottom-right-radius: 0;
 }
 
-/* 이메일 인증 버튼 */
 .verify-button {
   padding: 0.75rem 1rem;
   border-radius: 0.375rem;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
-  background-color: #88d4ff; /* 하늘색 */
+  background-color: #88d4ff;
   color: #ffffff;
   font-size: 0.875rem;
   font-weight: 500;
@@ -233,7 +335,6 @@ const resetPassword = () => {
   cursor: not-allowed;
 }
 
-/* 비밀번호 재설정 버튼 */
 .submit-button {
   width: 100%;
   display: flex;
@@ -241,7 +342,7 @@ const resetPassword = () => {
   padding: 0.75rem 1rem;
   border-radius: 0.375rem;
   color: #ffffff;
-  background-color: #4ca7cc; /* 진한 하늘색 */
+  background-color: #4ca7cc;
   font-size: 0.875rem;
   font-weight: 500;
   transition: background-color 0.15s ease-in-out;
@@ -252,11 +353,10 @@ const resetPassword = () => {
 }
 
 .submit-button:disabled {
-  background-color: #d1d5db; /* 비활성화 상태일 때 회색 */
+  background-color: #d1d5db;
   cursor: not-allowed;
 }
 
-/* 반응형 디자인 */
 @media (max-width: 640px) {
   .form-wrapper {
     padding: 1rem;
